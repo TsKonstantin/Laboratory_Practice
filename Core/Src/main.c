@@ -1,127 +1,90 @@
-#include <stdint.h>
 #include "init.h"
+#include <stdint.h>
+#include "LED_Control_Task.h" // Задание на защиту
 
-#define LED1_PIN    0
-#define LED2_PIN    7
-#define LED3_PIN    14
-#define BTN_NEXT    13 // PC13
-#define BTN_FREQ    7  // PD7
-#define BTN_SELECT  5  // PD5
+// --- Переменные состояния MODER для каждого пина порта E ---
+uint8_t PE0_mode,  PE1_mode,  PE2_mode,  PE3_mode, PD3_mode;
+uint8_t PE4_mode,  PE5_mode,  PD5_mode,  PE6_mode,  PE7_mode;
+uint8_t PE8_mode,  PE9_mode,  PE10_mode, PE11_mode;
+uint8_t PE12_mode, PE13_mode, PE14_mode, PE15_mode;
 
-#define READ_BTN_NEXT   ((GPIOC->IDR >> BTN_NEXT) & 1)
-#define READ_BTN_FREQ   ((GPIOD->IDR >> BTN_FREQ) & 1)
-#define READ_BTN_SELECT ((GPIOD->IDR >> BTN_SELECT) & 1)
+int main(void)
+{
+    /*
+    === Задание на защиту ===
+    GPIO_Init();
+    LED_Control_Task_Init();
+    */
 
-#define LED_ON(pin)     (GPIOB->BSRR = (1U << (pin)))
-#define LED_OFF(pin)    (GPIOB->BSRR = (1U << ((pin) + 16)))
-#define LED_TOGGLE(pin) (GPIOB->ODR ^= (1U << (pin)))
+    // === Инициализация ===
+    GPIO_Clock_Init();   // Тактирование
 
-static void delay_loop(volatile uint32_t count) { while(count--) __NOP(); }
-static void delay_ms(uint32_t ms) { for(uint32_t i=0;i<ms;i++) delay_loop(3800); } 
+    Button_PD3_Init();
+    Button_PD5_Init();
+    Button_PE10_Init();
 
-#define FREQ_COUNT 3
+    LED_PB0_Init();
+    LED_PB7_Init();
+    LED_PB14_Init();
 
-GPIO_PB0_INIT();
+    // === Инициализация дополнительных светодиодов 3 разными способами ===
 
-int main(void) {
-    // Тактирование портов
-    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN | RCC_AHB1ENR_GPIOCEN | RCC_AHB1ENR_GPIODEN;
+    // === Изначально все светодиоды выключены ===
+    GPIOB->BSRR = GPIO_BSRR_BR_0 | GPIO_BSRR_BR_7 | GPIO_BSRR_BR_14;
+    GPIOE->BSRR = GPIO_BSRR_BR_10;
 
-    // Настройка выходов
-    GPIOB->MODER &= ~((3U<<(LED1_PIN*2)) | (3U<<(LED2_PIN*2)) | (3U<<(LED3_PIN*2)));
-    GPIOB->MODER |=  ((1U<<(LED1_PIN*2)) | (1U<<(LED2_PIN*2)) | (1U<<(LED3_PIN*2)));
+    // === Основной цикл ===
+    while (1)
+    {
+        /*  
+        === Задание на защиту ===
+        LED_Control_Task();
+        */
 
-    // Настройка кнопок
-    GPIOC->MODER &= ~(3U << (BTN_NEXT*2));  GPIOC->PUPDR &= ~(3U << (BTN_NEXT*2));
-    GPIOD->MODER &= ~((3U << (BTN_FREQ*2)) | (3U << (BTN_SELECT*2)));
-    GPIOD->PUPDR &= ~((3U << (BTN_FREQ*2)) | (3U << (BTN_SELECT*2)));
-    GPIOD->PUPDR |= ((1U << (BTN_FREQ*2)) | (1U << (BTN_SELECT*2))); // pull-up
-
-    uint8_t prev_next=0, prev_freq=0, prev_select=0;
-    uint8_t led_enabled[3]={0,0,0};   // включение диодов
-    uint8_t led_blink[3]={0,0,0};     // режим мигания
-    uint8_t led_freq[3]={0,0,0};      // индекс частоты для каждого диода
-    uint32_t led_timer[3]={0,0,0};    // таймер для каждого диода
-    uint8_t select_led=0;              // выбранный диод
-
-    const uint8_t leds[]={LED1_PIN, LED2_PIN, LED3_PIN};
-
-    // отдельные массивы частот для каждого диода
-    const uint32_t freq_delay[3][FREQ_COUNT] = {
-        {70, 250, 500},   // PB0
-        {90, 350, 600},   // PB7
-        {120, 400, 700}   // PB14
-    };
-
-    while(1) {
-        // PC13: включаем следующий диод или сбрасываем все
-        if(READ_BTN_NEXT==0){
-            delay_loop(550);
-            if(READ_BTN_NEXT==0 && prev_next==0){
-                // проверяем, все ли диоды уже включены
-                uint8_t all_on = 1;
-                for(uint8_t i=0;i<3;i++) if(!led_enabled[i]) all_on=0;
-
-                if(all_on){
-                    // если все включены, гасим все
-                    for(uint8_t i=0;i<3;i++){
-                        led_enabled[i]=0;
-                        LED_OFF(leds[i]);
-                    }
-                } else {
-                    // включаем первый выключенный диод
-                    for(uint8_t i=0;i<3;i++){
-                        if(!led_enabled[i]){
-                            led_enabled[i]=1;
-                            LED_ON(leds[i]);
-                            break;
-                        }
-                    }
-                }
-                prev_next=1;
-            }
-        } else prev_next=0;
-
-        // PD5: выбор диода для настройки
-        if(READ_BTN_SELECT==0){
-            delay_loop(550);
-            if(READ_BTN_SELECT==0 && prev_select==0){
-                select_led++;
-                if(select_led>2) select_led=0;
-                prev_select=1;
-            }
-        } else prev_select=0;
-
-        // PD7: включение/выключение мигания и смена частоты для выбранного диода
-        if(READ_BTN_FREQ==0){
-            delay_loop(550);
-            if(READ_BTN_FREQ==0 && prev_freq==0){
-                led_blink[select_led] = !led_blink[select_led];
-                led_freq[select_led]++;
-                if(led_freq[select_led]>=FREQ_COUNT) led_freq[select_led]=0;
-                prev_freq=1;
-            }
-        } else prev_freq=0;
-
-        // Обновление диодов
-        for(uint8_t i=0;i<3;i++){
-            if(!led_enabled[i]){
-                LED_OFF(leds[i]);
-                led_timer[i]=0;
-                continue;
-            }
-            if(led_blink[i]){
-                led_timer[i]++;
-                if(led_timer[i]>=freq_delay[i][led_freq[i]]){
-                    LED_TOGGLE(leds[i]);
-                    led_timer[i]=0;
-                }
-            } else {
-                LED_ON(leds[i]);
-                led_timer[i]=0;
-            }
+        // --- Кнопка PD3: устанавливает GPIOE во вход ---
+        if (!(GPIOD->IDR & GPIO_IDR_ID3))
+        {
+            GPIOE->MODER &= ~0x55555555;     // весь порт E — вход
+            GPIOB->BSRR = GPIO_BSRR_BS_14;   // красный светодиод - индикатор PB14 ВКЛ
+        }
+        else
+        {
+            GPIOB->BSRR = GPIO_BSRR_BR_14;   // красный светодиод - индикатор PB14 ВЫКЛ
         }
 
-        delay_ms(1);
+        // --- Кнопка PD5: устанавливает GPIOE в выход ---
+        if (!(GPIOD->IDR & GPIO_IDR_ID5))
+        {
+            GPIOE->MODER = 0x55555555;       // весь порт E — выход
+            GPIOB->BSRR = GPIO_BSRR_BS_7;    // синий светодиод - индикатор PB7 ВКЛ
+        }
+        else
+        {
+            GPIOB->BSRR = GPIO_BSRR_BR_7;    // синий светодиод - индикатор PB7 ВКЛ
+        }
+
+        // --- Кнопка PE10: управление по режиму ---
+        if (GPIOE->MODER == 0x00000000) // порт E — вход
+        {
+            if (!(GPIOE->IDR & GPIO_IDR_ID10))
+                GPIOB->BSRR = GPIO_BSRR_BS_0; // жёлтый светодиод - индикатор PD0 ВКЛ
+            else
+                GPIOB->BSRR = GPIO_BSRR_BR_0; // жёлтый светодиод - индикатор PD 0 ВЫКЛ
+        }
+        else if (GPIOE->MODER == 0x55555555) // порт E — выход
+        {
+            if (!(GPIOE->IDR & GPIO_IDR_ID10))
+                GPIOE->BSRR = GPIO_BSRR_BS_10; // PE10 светодиод ВКЛ
+            else
+                GPIOE->BSRR = GPIO_BSRR_BR_10; // PE10 светодиод ВЫКЛ
+        }
+
+        // --- Отладка состояний ---
+        Debug_Read_MODER(
+            &PE0_mode, &PE1_mode, &PE2_mode, &PE3_mode, &PD3_mode,
+            &PE4_mode, &PE5_mode, &PD5_mode, &PE6_mode, &PE7_mode,
+            &PE8_mode, &PE9_mode, &PE10_mode, &PE11_mode,
+            &PE12_mode, &PE13_mode, &PE14_mode, &PE15_mode
+        );
     }
-}
+} 

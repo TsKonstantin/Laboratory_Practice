@@ -3,10 +3,8 @@
 #include "LED_Control_Task.h" // Задание на защиту
 
 // --- Переменные состояния MODER для каждого пина порта E ---
-uint8_t PE0_mode,  PE1_mode,  PE2_mode,  PE3_mode, PD3_mode;
-uint8_t PE4_mode,  PE5_mode,  PD5_mode,  PE6_mode,  PE7_mode;
-uint8_t PE8_mode,  PE9_mode,  PE10_mode, PE11_mode;
-uint8_t PE12_mode, PE13_mode, PE14_mode, PE15_mode;
+uint8_t PB0_mode,  PB7_mode,  PB14_mode,
+uint8_t PD3_mode;  PD5_mode,  PE10_mode;
 
 int main(void)
 {
@@ -16,28 +14,33 @@ int main(void)
     LED_Control_Task_Init();
     */
 
-    // === Инициализация ===
-    GPIO_Clock_Init();   // Тактирование
+    // === Инициализация тактирования ===
+    GPIO_Clock_Init();
 
+    // === Инициализация светодиодов-индикаторов ===
     Button_PD3_Init();
     Button_PD5_Init();
     Button_PE10_Init();
 
+    // === Инициализация светодиодов-индикаторов ===
     LED_PB0_Init();
     LED_PB7_Init();
     LED_PB14_Init();
 
-    // === Инициализация дополнительных светодиодов 3 разными способами ===
+    /*
+    // === Инициализация дополнительных светодиодов ===
+    void GPIO_PF11_INIT(void); // Настройка светодиода PF11 прямым обращением к регистрам
+    void GPIO_PG9_INIT(void); // Настройка светодиода PG9 собственными макросами
+    */
 
     // === Изначально все светодиоды выключены ===
     GPIOB->BSRR = GPIO_BSRR_BR_0 | GPIO_BSRR_BR_7 | GPIO_BSRR_BR_14;
     GPIOE->BSRR = GPIO_BSRR_BR_10;
 
-    // === Основной цикл ===
     while (1)
     {
         /*  
-        === Задание на защиту ===
+        // --- Задание на защиту ---
         LED_Control_Task();
         */
 
@@ -81,10 +84,8 @@ int main(void)
 
         // --- Отладка состояний ---
         Debug_Read_MODER(
-            &PE0_mode, &PE1_mode, &PE2_mode, &PE3_mode, &PD3_mode,
-            &PE4_mode, &PE5_mode, &PD5_mode, &PE6_mode, &PE7_mode,
-            &PE8_mode, &PE9_mode, &PE10_mode, &PE11_mode,
-            &PE12_mode, &PE13_mode, &PE14_mode, &PE15_mode
+            &PB0_mode, &PB7_mode, &PB14_mode, &PD3_mode,
+            &PD3_mode, &PD5_mode, &PE10_mode, 
         );
     }
 } 
